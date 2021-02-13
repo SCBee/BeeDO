@@ -134,7 +134,7 @@ void RenderMenu()
 		ImGui::Text("");
 		ImGui::Text("");
 		ImGui::Text("");
-		ImGui::Text("Made by floob");
+		ImGui::Text("");
 
 		ImGui::End();
 	}
