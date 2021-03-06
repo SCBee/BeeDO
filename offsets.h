@@ -1,5 +1,11 @@
 #include <cstdint>
 
+// Structures to hold the memory addresses of:
+// 1) PLAYER
+// 2) MOUNT
+// 3) PLAYER CONTROL
+// 4) PLAYER SCENE
+
 class LocalPlayer
 {
 public:

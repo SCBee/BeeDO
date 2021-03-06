@@ -1,11 +1,12 @@
+// Variables
 bool firstTime = true;
 bool createdepthstencil = true;
-
 UINT vps = 1;
 D3D11_VIEWPORT viewport;
 float ScreenCenterX;
 float ScreenCenterY;
 
+// D3D Objects
 ID3D11Texture2D* texGreen = nullptr;
 ID3D11Texture2D* texRed = nullptr;
 
@@ -46,8 +47,8 @@ ID3D11Resource* Resource;
 D3D11_SHADER_RESOURCE_VIEW_DESC Descr;
 D3D11_TEXTURE2D_DESC texdesc;
 
+// Menu + Window
 void* ReturnAddress;
-
 HWND window = nullptr;
 bool ShowMenu = false;
 static WNDPROC OriginalWndProcHandler = nullptr;
@@ -65,6 +66,7 @@ struct propertiesModel
 	UINT pscdesc_ByteWidth;
 };
 
+// Memory addresses of player func
 uintptr_t PlayerNOP;
 uintptr_t MountNOP;
 uintptr_t RequestLoot;
@@ -72,6 +74,7 @@ uintptr_t TakeLoot;
 uintptr_t NoCD;
 uintptr_t FixTP;
 
+// Player Attribute (Default settings)
 int moveSpeedVal = 90000;
 int attackSpeedVal = 90000;
 int castSpeedVal = 90000;
@@ -91,12 +94,14 @@ bool teleportStart = false;
 
 #define BUFFER_SIZE 1024
 
+// NOPing instructions for trampoline
 #pragma region offsets
 BYTE Nop[] = { 0x90, 0x90, 0x90 , 0x90, 0x90, 0x90, 0x90 };
 #pragma endregion
 
 #include <fstream>
 
+// Address that we NOP (Player functions)
 void NopAddress(PVOID address, int bytes)
 {
 	DWORD d, ds;
@@ -119,11 +124,12 @@ namespace std
 	};
 }
 
+// Set up console (LOGGER)
 void ConsoleSetup()
 {
 	AllocConsole();
 	FILE* file = nullptr;
-	SetConsoleTitle("[+] ProBDO Console");
+	SetConsoleTitle("[+] BeeDO Console");
 	freopen_s(&file, "CONOUT$", "w", stdout);
 	freopen_s(&file, "CONOUT$", "w", stderr);
 	freopen_s(&file, "CONIN$", "r", stdin);
@@ -134,6 +140,7 @@ int									g_Index = -1;
 std::vector<void*>					g_Vector;
 void* g_SelectedAddress = NULL;
 
+// Check if the address is legal
 bool IsAddressPresent(void* Address)
 {
 	for (auto it = g_Vector.begin(); it != g_Vector.end(); ++it)
@@ -144,6 +151,7 @@ bool IsAddressPresent(void* Address)
 	return false;
 }
 
+// D3D11 Shader Initialization
 HRESULT GenerateShader(ID3D11Device* pD3DDevice, ID3D11PixelShader** pShader, float r, float g, float b)
 {
 	char szCast[] = "struct VS_OUT"
@@ -231,12 +239,14 @@ ID3D11RasterizerState* rSOLIDState;
 #include <string>
 #include <fstream>
 
+// Save config file
 void SaveCfg()
 {
 	ofstream fout;
 	fout.close();
 }
 
+// Load config file
 void LoadCfg()
 {
 	ifstream fin;
@@ -244,6 +254,7 @@ void LoadCfg()
 	fin.close();
 }
 
+// D3D11 Rendering
 void CreateRenderTarget()
 {
 	DXGI_SWAP_CHAIN_DESC sd;

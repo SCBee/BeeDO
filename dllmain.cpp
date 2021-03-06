@@ -2,82 +2,99 @@
 #include <Windows.h>
 #include <intrin.h>
 #include <vector>
-#include <d3d11.h>
-#include <D3Dcompiler.h>
 #include <stdlib.h>
-#include "pmemory.h"
 #include <sstream>
 #include <string>
 #include <chrono>
 #include <thread>
+#include <iostream>
+#include <tchar.h>
+
+// Header
+#include "pmemory.h" // Memory Read/Write/Pattern Scan
+#include "main.h"
+#include "offsets.h"
+
+// Direct X 11
+#include <d3d11.h>
+#include <D3Dcompiler.h>
 #pragma comment(lib, "D3dcompiler.lib")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "winmm.lib")
 
+// Dear ImGui
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx11.h"
 
+// Detours Lib
 #include "detours.h"
 #if defined _M_X64
 #pragma comment(lib, "detours.lib")
 #elif defined _M_IX86
 #pragma comment(lib, "detours.lib")
 #endif
-
 #pragma warning( disable : 4244 )
 
-
+// D3D11 Func
 typedef HRESULT(__stdcall* D3D11PresentHook) (IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 typedef HRESULT(__stdcall* D3D11ResizeBuffersHook) (IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 typedef void(__stdcall* D3D11PSSetShaderResourcesHook) (ID3D11DeviceContext* pContext, UINT StartSlot, UINT NumViews, ID3D11ShaderResourceView* const* ppShaderResourceViews);
 typedef void(__stdcall* D3D11DrawHook) (ID3D11DeviceContext* pContext, UINT VertexCount, UINT StartVertexLocation);
 
-#define DEPTH_BIAS_D32_FLOAT(d) (d/(1/pow(2,23)))
-
+// D3D 11 Objects
 D3D11PresentHook phookD3D11Present = NULL;
 D3D11ResizeBuffersHook phookD3D11ResizeBuffers = NULL;
 D3D11PSSetShaderResourcesHook phookD3D11PSSetShaderResources = NULL;
 D3D11DrawHook phookD3D11Draw = NULL;
 
+// D3D 11 PTR
 IDXGISwapChain* SwapChain;
 ID3D11Device* pDevice = NULL;
 ID3D11DeviceContext* pContext = NULL;
 
+// PTR to Target's VTable
 DWORD_PTR* pSwapChainVtable = NULL;
 DWORD_PTR* pContextVTable = NULL;
 DWORD_PTR* pDeviceVTable = NULL;
 
-#include "main.h"
-#include <iostream>
-#include <tchar.h>
-#include "offsets.h"
-
+// Declare ImGui Extras
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 static bool imGuiInitializing = false;
 
+// Floating-point Bias
+#define DEPTH_BIAS_D32_FLOAT(d) (d/(1/pow(2,23)))
+
+// Player/Character Objects
 LocalPlayer localPlayer;
 LocalMount localMount;
 CharacterControl characterControl;
 CharacterScene characterScene;
 
-
+// Grab memory addresses of desired objects from target program's dynamic memory using pattern scanning technique ...
+// Save addresses in player and mount objects
 void GetAddresses()
 {
 	try
 	{
+		// Local Player
 		auto playerOffset = FindPattern(GetModuleHandleW(0), (unsigned char*)"\x48\x8B\x1D\x00\x00\x00\x00\x48\x85\xDB\x0F\x84\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x80\x78\x20\x00", "xxx????xxxxx????x????xxxx");																			   
 		auto player = Read<UINT32>(playerOffset + 0x3);
 		localPlayer.base = player + playerOffset + 0x7;
+
+		// Local Mount
 		auto mountOffset = FindPattern(GetModuleHandleW(0), (unsigned char*)"\x4C\x8B\x25\x00\x00\x00\x00\x4D\x85\xE4\x0F\x84\x00\x00\x00\x00\x41\x8B\x8C\x24\x00\x00\x00\x00", "xxx????xxxxx????xxxx????"); //48 8B 1D ? ? ? ? 48 85 DB 0F 84 ? ? ? ? 8B 8B
 		auto mount = Read<UINT32>(mountOffset + 0x3);
 		localMount.base = mount + mountOffset + 0x7;
 
+		// Player and mount NOP instructions
 		PlayerNOP = FindPattern(GetModuleHandleW(0), (unsigned char*)"\x42\x89\xB4\xBF\x00\x00\x00\x00", "xxxx????"); //89 B4 87 ? ? ? ? 44 89 A4 87 ? ? ? ?
 		MountNOP = FindPattern(GetModuleHandleW(0), (unsigned char*)"\x41\x89\x84\x8B\x00\x00\x00\x00", "xxxx????");
 	}
 
 	catch (exception e) {}
+
+	// Send error to console if player and mount objects could not be found.
 	if (!localPlayer.base || !localMount.base || !PlayerNOP)
 	{
 		ConsoleSetup();
@@ -85,8 +102,10 @@ void GetAddresses()
 	}
 }
 
+// ImGui Menu (Paramter Customizations)
 void RenderMenu()
 {
+	// Make new frames (required for ImGui)
 	ImGui_ImplWin32_NewFrame();
 	ImGui_ImplDX11_NewFrame();
 	ImGui::NewFrame();
@@ -98,7 +117,7 @@ void RenderMenu()
 		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.2f, 0.2f, 0.2f, 0.8f));
 
 		ImGui::Begin("", 0, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-		ImGui::Text("Blanched loaded, press INSERT for menu");
+		ImGui::Text("BeeDO Loaded - Press INSERT for menu");
 		ImGui::End();
 
 		static DWORD lastTime = timeGetTime();
@@ -139,11 +158,13 @@ void RenderMenu()
 		ImGui::End();
 	}
 
+	// Clean up
 	ImGui::EndFrame();
 	ImGui::Render();
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
+// WINDOWS Virtual Keyboard Input
 void SendKey(short keyCode)
 {
 	INPUT ip;
@@ -161,6 +182,7 @@ void SendKey(short keyCode)
 	Sleep(30);
 }
 
+// Activate cursor for menu
 LRESULT CALLBACK hWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -197,6 +219,7 @@ LRESULT CALLBACK hWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return CallWindowProc(OriginalWndProcHandler, hWnd, uMsg, wParam, lParam);
 }
 
+// D3D Initialization with ImGui
 HRESULT __stdcall hookD3D11ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
 {
 	imGuiInitializing = true;
@@ -209,6 +232,7 @@ HRESULT __stdcall hookD3D11ResizeBuffers(IDXGISwapChain* pSwapChain, UINT Buffer
 	return toReturn;
 }
 
+// Start D3D11 Menu
 HRESULT __stdcall hookD3D11Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
 	if (firstTime)
@@ -264,108 +288,13 @@ HRESULT __stdcall hookD3D11Present(IDXGISwapChain* pSwapChain, UINT SyncInterval
 	return phookD3D11Present(pSwapChain, SyncInterval, Flags);
 }
 
-struct s_vector
-{
-	s_vector(float a1, float a2, float a3)
-	{
-		_x = a1;
-		_y = a2;
-		_z = a3;
-	};
-	void clear()
-	{
-		_x = 0;
-		_y = 0;
-		_z = 0;
-	}
-	bool is_zero()
-	{
-		if (_x == 0 && _y == 0 && _z == 0) return 1;
-		else return 0;
-	}
-	float _x;
-	float _y;
-	float _z;
-};
-
-float relative_distance(s_vector start, s_vector end)
-{
-	if (start.is_zero() || end.is_zero()) return 0;
-	auto _x_r = end._x - start._x;
-	auto _y_r = end._y - start._y;
-	auto _z_r = end._z - start._z;
-	return static_cast<float>(std::sqrt(_x_r * _x_r + _y_r * _y_r + _z_r * _z_r));
-}
-
+// Draw
 void __stdcall hookD3D11Draw(ID3D11DeviceContext* pContext, UINT VertexCount, UINT StartVertexLocation)
 {
 	return phookD3D11Draw(pContext, VertexCount, StartVertexLocation);
 }
 
-void SetAttackSpeed()
-{
-	uintptr_t attackSpeedAddress = GetDMA(localPlayer.base, &localPlayer.attackSpeed, 1);
-	Write(attackSpeedAddress, attackSpeedVal);
-}
-
-void SetMovementSpeed()
-{
-	uintptr_t movementSpeedAdress = GetDMA(localPlayer.base, &localPlayer.moveSpeed, 1);
-	Write(movementSpeedAdress, moveSpeedVal);
-}
-
-void SetCastSpeed()
-{
-	uintptr_t castSpeedAddress = GetDMA(localPlayer.base, &localPlayer.castSpeed, 1);
-	Write(castSpeedAddress, castSpeedVal);
-}
-
-void SetAnimationSpeed()
-{
-	uintptr_t _characterControl = GetDMA(localPlayer.base, &localPlayer.characterControl, 1);
-	uintptr_t _characterScene = GetDMA(_characterControl, &characterControl.characterScene, 1);
-	uintptr_t _animationSpeedAddress = GetDMA(_characterScene, &characterScene.animationSpeed, 1);
-	Write(_animationSpeedAddress, animationSpeedVal);
-}
-
-void ResetAnimationSpeed()
-{
-	uintptr_t _characterControl = GetDMA(localPlayer.base, &localPlayer.characterControl, 1);
-	uintptr_t _characterScene = GetDMA(_characterControl, &characterControl.characterScene, 1);
-	uintptr_t _animationSpeedAddress = GetDMA(_characterScene, &characterScene.animationSpeed, 1);
-	Write(_animationSpeedAddress, 1.0f);
-}
-
-void AutoLoot()
-{
-	if (lootReady)
-		takeLoot();
-
-	static auto lastTick = DWORD();
-	if (GetTickCount64() <= lastTick) return;
-	lastTick = GetTickCount64() + 150;
-
-	uintptr_t localP = Read_s<uint64_t>(localPlayer.base);
-	if (!localP) return;
-
-	lootReady = false;
-
-	uintptr_t type = 0x5C;
-	uintptr_t hasLoot = 0x3C8;
-	byte deadBody = 9;
-	uintptr_t actor = Read_s<uintptr_t>(localPlayer.base + 0x28);
-	if (!actor) return;
-
-	auto _type_actor = Read_s<byte>(actor + type);
-	if (_type_actor == deadBody) //!= 0
-	{
-		lootReady = true;
-		takeLoot();
-		requestLoot(localP, actor);
-		takeLoot();
-	}
-}
-
+// Pass program settings
 void __stdcall hookD3D11PSSetShaderResources(ID3D11DeviceContext* pContext, UINT StartSlot, UINT NumViews, ID3D11ShaderResourceView* const* ppShaderResourceViews)
 {
 	pssrStartSlot = StartSlot;
@@ -406,6 +335,108 @@ void __stdcall hookD3D11PSSetShaderResources(ID3D11DeviceContext* pContext, UINT
 
 	return phookD3D11PSSetShaderResources(pContext, StartSlot, NumViews, ppShaderResourceViews);
 }
+
+// 3D Vectors (Used for player and mount loci)
+struct s_vector
+{
+	s_vector(float a1, float a2, float a3)
+	{
+		_x = a1;
+		_y = a2;
+		_z = a3;
+	};
+	void clear()
+	{
+		_x = 0;
+		_y = 0;
+		_z = 0;
+	}
+	bool is_zero()
+	{
+		if (_x == 0 && _y == 0 && _z == 0) return 1;
+		else return 0;
+	}
+	float _x;
+	float _y;
+	float _z;
+};
+
+// Dot product
+float relative_distance(s_vector start, s_vector end)
+{
+	if (start.is_zero() || end.is_zero()) return 0;
+	auto _x_r = end._x - start._x;
+	auto _y_r = end._y - start._y;
+	auto _z_r = end._z - start._z;
+	return static_cast<float>(std::sqrt(_x_r * _x_r + _y_r * _y_r + _z_r * _z_r));
+}
+
+#pragma region Character_Attributes
+// Read/Write/Freeze character attributes
+void SetAttackSpeed()
+{
+	uintptr_t attackSpeedAddress = GetDMA(localPlayer.base, &localPlayer.attackSpeed, 1);
+	Write(attackSpeedAddress, attackSpeedVal);
+}
+
+void SetMovementSpeed()
+{
+	uintptr_t movementSpeedAdress = GetDMA(localPlayer.base, &localPlayer.moveSpeed, 1);
+	Write(movementSpeedAdress, moveSpeedVal);
+}
+
+void SetCastSpeed()
+{
+	uintptr_t castSpeedAddress = GetDMA(localPlayer.base, &localPlayer.castSpeed, 1);
+	Write(castSpeedAddress, castSpeedVal);
+}
+
+void SetAnimationSpeed()
+{
+	uintptr_t _characterControl = GetDMA(localPlayer.base, &localPlayer.characterControl, 1);
+	uintptr_t _characterScene = GetDMA(_characterControl, &characterControl.characterScene, 1);
+	uintptr_t _animationSpeedAddress = GetDMA(_characterScene, &characterScene.animationSpeed, 1);
+	Write(_animationSpeedAddress, animationSpeedVal);
+}
+
+void ResetAnimationSpeed()
+{
+	uintptr_t _characterControl = GetDMA(localPlayer.base, &localPlayer.characterControl, 1);
+	uintptr_t _characterScene = GetDMA(_characterControl, &characterControl.characterScene, 1);
+	uintptr_t _animationSpeedAddress = GetDMA(_characterScene, &characterScene.animationSpeed, 1);
+	Write(_animationSpeedAddress, 1.0f);
+}
+
+// Vacuum function (Do not use without bypass)
+// void AutoLoot()
+// {
+// 	if (lootReady)
+// 		takeLoot();
+
+// 	static auto lastTick = DWORD();
+// 	if (GetTickCount64() <= lastTick) return;
+// 	lastTick = GetTickCount64() + 150;
+
+// 	uintptr_t localP = Read_s<uint64_t>(localPlayer.base);
+// 	if (!localP) return;
+
+// 	lootReady = false;
+
+// 	uintptr_t type = 0x5C;
+// 	uintptr_t hasLoot = 0x3C8;
+// 	byte deadBody = 9;
+// 	uintptr_t actor = Read_s<uintptr_t>(localPlayer.base + 0x28);
+// 	if (!actor) return;
+
+// 	auto _type_actor = Read_s<byte>(actor + type);
+// 	if (_type_actor == deadBody) //!= 0
+// 	{
+// 		lootReady = true;
+// 		takeLoot();
+// 		requestLoot(localP, actor);
+// 		takeLoot();
+// 	}
+// }
 
 void Teleport()
 {
@@ -492,9 +523,10 @@ void RecieveOffsets()
 	localMount.speed = localMount.acceleration + 0x4;
 	localMount.turn = localMount.acceleration + 0x8;
 	localMount.brake = localMount.acceleration + 0xC;
-	
 }
+#pragma endregion // Character_Attributes
 
+// Driver
 const int MultisampleCount = 1;
 LRESULT CALLBACK DXGIMsgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) { return DefWindowProc(hwnd, uMsg, wParam, lParam); }
 DWORD __stdcall HookAndUpdate(LPVOID)
@@ -587,7 +619,7 @@ DWORD __stdcall HookAndUpdate(LPVOID)
 
 	DWORD dwOld;
 	VirtualProtect(phookD3D11Present, 2, PAGE_EXECUTE_READWRITE, &dwOld);
-#pragma endregion
+#pragma endregion // Hook
 
 	GetAddresses();
 
@@ -637,6 +669,7 @@ DWORD __stdcall HookAndUpdate(LPVOID)
 	return NULL;
 }
 
+// MAIN
 BOOL __stdcall DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved)
 {
 	switch (dwReason)
