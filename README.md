@@ -5,8 +5,6 @@ This is an old project made in 2015 for a popular mmorpg. The purpose was to gai
 
 Thank you to everyone on GH & UC that helped me complete this project!
 
-#### This project is no longer supported.
-
-#### I have decided to make this a learning experience for those that are interested in the project so I will be updating the files over time to include descriptive comments
+#### This project is no longer supported. For those that are interested, please read the comments that I have included inside the code to learn what is happening.
 
 #### As of 2021 - Added descriptive comments on most of program's functionality
