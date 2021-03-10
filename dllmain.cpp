@@ -684,7 +684,5 @@ BOOL __stdcall DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved)
 		break;
 	}
 
-	// test test test
-
 	return TRUE;
 }
