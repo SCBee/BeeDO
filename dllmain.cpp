@@ -683,5 +683,8 @@ BOOL __stdcall DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved)
 	case DLL_PROCESS_DETACH:
 		break;
 	}
+
+	// test test test
+
 	return TRUE;
 }
