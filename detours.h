@@ -14,7 +14,6 @@
 #define DETOURS_VERSION     0x4c0c1   // 0xMAJORcMINORcPATCH
 
 //////////////////////////////////////////////////////////////////////////////
-//
 
 #undef DETOURS_X64
 #undef DETOURS_X86

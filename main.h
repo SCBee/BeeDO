@@ -1,4 +1,4 @@
-// Variables
+// Variables 
 bool firstTime = true;
 bool createdepthstencil = true;
 UINT vps = 1;

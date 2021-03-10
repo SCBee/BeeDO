@@ -72,7 +72,7 @@ CharacterControl characterControl;
 CharacterScene characterScene;
 
 // Grab memory addresses of desired objects from target program's dynamic memory using pattern scanning technique ...
-// Save addresses in player and mount objects
+// Save addresses in player and mount objects 
 void GetAddresses()
 {
 	try
