@@ -11,5 +11,3 @@ Thank you to everyone on GH & UC that helped me complete this project!
 
 ---
 #### This project is no longer supported. For those that are interested, please read the comments that I have included inside the code to learn what is happening.
-
-#### As of 2021 - Added descriptive comments on most of program's functionality
